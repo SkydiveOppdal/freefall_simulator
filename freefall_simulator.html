@@ -524,12 +524,13 @@ const WIND_ALTS_FT = [12000, 9000, 6000, 3000];
 const CANOPY_SINK_FPM = 1000;             // feet per minute (not user-editable)
 const CANOPY_SINK_MS  = CANOPY_SINK_FPM * FT_TO_M / 60;
 const CANOPY_SIM_TIME = 18;               // seconds past pull to continue drawing canopy drift
+const MIN_SEPARATION_M = 200;             // minimal safe separation in meters
 
 const GROUP_DEFS = [
-  { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 200, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
-  { id: 'smallBelly',  name: 'Small Belly',  vFall_kph: 220, family: 'belly',   color: '#ffe234', colorDim: 'rgba(255,226,52,0.25)'  },
-  { id: 'slowFreefly', name: 'Slow Freefly', vFall_kph: 270, family: 'freefly', color: '#00d2d3', colorDim: 'rgba(0,210,211,0.25)'   },
-  { id: 'fastFreefly', name: 'Fast Freefly', vFall_kph: 300, family: 'freefly', color: '#ff5e57', colorDim: 'rgba(255,94,87,0.25)'   },
+  { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 180, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
+  { id: 'smallBelly',  name: 'Small Belly',  vFall_kph: 200, family: 'belly',   color: '#ffe234', colorDim: 'rgba(255,226,52,0.25)'  },
+  { id: 'slowFreefly', name: 'Slow Freefly', vFall_kph: 240, family: 'freefly', color: '#00d2d3', colorDim: 'rgba(0,210,211,0.25)'   },
+  { id: 'fastFreefly', name: 'Fast Freefly', vFall_kph: 280, family: 'freefly', color: '#ff5e57', colorDim: 'rgba(255,94,87,0.25)'   },
 ];
 
 const GROUP_BY_ID = Object.fromEntries(GROUP_DEFS.map(g => [g.id, g]));
@@ -942,6 +943,46 @@ function renderCanvas(t) {
     }
   }
 
+  // ── inter-group distance lines (animation) ────────────────
+  if (animMode && simResults.length > 1) {
+    const positions = [];
+    for (const r of simResults) {
+      if (t < r.exitTime) continue;
+      const elapsed = Math.min(t - r.exitTime, r.totalTime || r.fallTime);
+      const pos = getInterpolatedPos(r.traj, elapsed);
+      positions.push({ pos, r });
+    }
+    // sort by x position
+    positions.sort((a, b) => a.pos.x - b.pos.x);
+
+    // draw lines between consecutive groups
+    for (let i = 0; i < positions.length - 1; i++) {
+      const p1 = positions[i].pos;
+      const p2 = positions[i + 1].pos;
+      const cx1 = tx(p1.x), cy1 = ty(p1.z);
+      const cx2 = tx(p2.x), cy2 = ty(p2.z);
+      const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.z - p1.z) ** 2);
+      const isClose = dist < MIN_SEPARATION_M;
+
+      ctx.strokeStyle = isClose ? '#ff4444' : 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = isClose ? 2 : 1;
+      ctx.setLineDash(isClose ? [2, 2] : [3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cx1, cy1);
+      ctx.lineTo(cx2, cy2);
+      ctx.stroke();
+
+      // label with 2D distance
+      const midX = (cx1 + cx2) / 2;
+      const midY = (cy1 + cy2) / 2;
+      ctx.fillStyle = isClose ? '#ff4444' : 'rgba(255,255,255,0.8)';
+      ctx.font = isClose ? 'bold 10px "Share Tech Mono", monospace' : '10px "Share Tech Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${Math.round(dist)}m`, midX, midY - 5);
+    }
+    ctx.setLineDash([]);
+  }
+
   // ── pull altitude separation arrows (static mode) ─────────
   if (!animMode && simResults.length > 1) {
     const pullY = ty(PULL_ALT_M);
@@ -1140,7 +1181,7 @@ function buildWindPanel() {
     row.className = 'wind-row';
     row.innerHTML = `
       <span class="wind-alt">${aft.toLocaleString()}ft</span>
-      <input type="range" id="wSlider${aft}" min="-40" max="40" step="1" value="${w}">
+      <input type="range" id="wSlider${aft}" min="-50" max="50" step="1" value="${w}">
       <span class="wind-val ${w >= 0 ? 'pos' : 'neg'}" id="wVal${aft}">${w > 0 ? '+' : ''}${w} kts</span>
     `;
     panel.appendChild(row);
