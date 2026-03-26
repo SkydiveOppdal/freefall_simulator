@@ -420,6 +420,10 @@ select.speed-sel {
           <label>Aircraft Speed <span class="unit">kts (IAS, into wind)</span></label>
           <input type="number" id="iAircraftSpeed" value="70" min="40" max="120" step="1">
         </div>
+        <div class="field" id="speedInfo">
+          <label>Computed Speed</label>
+          <div id="speedInfoText" style="color:var(--txt); font-size:12px; min-height:20px;">TAS: -- kts · GS: -- kts</div>
+        </div>
         <div class="field">
           <label>Group Spacing <span class="unit">seconds</span></label>
           <input type="number" id="iSpacing" value="7" min="3" max="30" step="1">
@@ -532,6 +536,8 @@ const GROUP_BY_ID = Object.fromEntries(GROUP_DEFS.map(g => [g.id, g]));
 let settings = {
   exitAlt_ft:       13000,
   aircraftSpeed_kts: 70,
+  tas_kts:          null,
+  gs_kts:           null,
   spacing_s:         7,
   wind: { 12000: 20, 9000: 18, 6000: 15, 3000: 12 },
   groups:            ['bigBelly','smallBelly','slowFreefly','fastFreefly'],
@@ -591,10 +597,18 @@ function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
 
 function runSim() {
   const exitAlt_m   = settings.exitAlt_ft * FT_TO_M;
-  const windAtExit  = getWindAt_ms(exitAlt_m);
+  const windAtExit_ms = getWindAt_ms(exitAlt_m);
 
-  // Aircraft flies INTO wind → ground velocity = -(IAS) + wind
-  const aircraftGndVx = -settings.aircraftSpeed_kts * KTS_TO_MS + windAtExit;
+  // Convert user IAS to TAS using altitude-dependent density correction.
+  const tas_kts      = computeTrueAirspeed(settings.aircraftSpeed_kts, settings.exitAlt_ft);
+  const windAtExit_kts = windAtExit_ms / KTS_TO_MS;
+  const gs_kts       = tas_kts - windAtExit_kts;
+
+  settings.tas_kts = tas_kts;
+  settings.gs_kts  = gs_kts;
+
+  // Aircraft flies INTO wind → ground velocity (m/s) = -TAS + wind
+  const aircraftGndVx = -tas_kts * KTS_TO_MS + windAtExit_ms;
 
   const results = [];
 
@@ -1014,6 +1028,7 @@ function recompute() {
   updateGroupList();
   updateStatsBox();
   updateSlider();
+  updateSpeedInfo();
   renderCanvas(animTime);
 }
 
@@ -1178,6 +1193,38 @@ function updateStatsBox() {
   // Update stats in the group list (handled in updateGroupList)
 }
 
+function computeTrueAirspeed(ias_kts, alt_ft) {
+  // Approximate standard atmosphere density altitude correction: TAS = IAS * sqrt(rho0 / rho)
+  const alt_m = alt_ft * FT_TO_M;
+  const rho0 = 1.225; // kg/m3 at sea level ISA
+  // ISA model density from altitude (troposphere, up to ~11 km)
+  const rho = rho0 * Math.pow(1 - 0.00000687535 * alt_m, 4.255877);
+  if (rho <= 0) return ias_kts;
+  return ias_kts * Math.sqrt(rho0 / rho);
+}
+
+function updateSpeedInfo() {
+  const ias = settings.aircraftSpeed_kts;
+  const alt_ft = settings.exitAlt_ft;
+  const tas = computeTrueAirspeed(ias, alt_ft);
+
+  const alt_m = alt_ft * FT_TO_M;
+  const wind_at_exit_kts = getWindAt_ms(alt_m) / KTS_TO_MS;
+  const gs = tas - wind_at_exit_kts;
+
+  settings.tas_kts = tas;
+  settings.gs_kts = gs;
+
+  const windDirection = wind_at_exit_kts >= 0 ? 'head' : 'tail';
+
+  const el = document.getElementById('speedInfoText');
+  if (!el) return;
+
+  el.textContent =
+    `TAS: ${tas.toFixed(0)} kt (at ${alt_ft} ft) · ` +
+    `GS: ${gs.toFixed(0)} kt`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  INPUT BINDINGS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1284,6 +1331,7 @@ function applySettingsToUI() {
       vl.className   = `wind-val ${v >= 0 ? 'pos' : 'neg'}`;
     }
   });
+  updateSpeedInfo();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
