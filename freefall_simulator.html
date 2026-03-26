@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freefall Drift Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Share+Tech+Mono&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #06080f;
+  --surf:    #0c1120;
+  --panel:   #111827;
+  --bord:    #1e2d47;
+  --bord2:   #28406a;
+  --txt:     #c8d8f0;
+  --muted:   #4a6080;
+  --acc:     #00b4d8;
+  --amber:   #fca522;
+  --pull-c:  rgba(252,165,34,0.85);
+  --grid-c:  rgba(30,60,100,0.45);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── HEADER ─────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 18px;
+  background: var(--surf);
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+header h1 {
+  font-family: 'Orbitron', monospace;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--acc);
+  text-shadow: 0 0 18px rgba(0,180,216,0.35);
+  white-space: nowrap;
+}
+
+.header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.tagline {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* ── BUTTONS ─────────────────────────────────────── */
+button {
+  background: var(--panel);
+  color: var(--txt);
+  border: 1px solid var(--bord2);
+  border-radius: 5px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+button:hover { background: var(--bord); border-color: var(--acc); color: var(--acc); }
+button.primary {
+  background: rgba(0,180,216,0.15);
+  border-color: var(--acc);
+  color: var(--acc);
+}
+button.primary:hover { background: rgba(0,180,216,0.25); }
+button.amber {
+  background: rgba(252,165,34,0.12);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+button.amber:hover { background: rgba(252,165,34,0.22); }
+button.sm { padding: 3px 8px; font-size: 11px; }
+
+/* ── LAYOUT ─────────────────────────────────────── */
+main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── CONTROLS SIDEBAR ────────────────────────────── */
+
+#controls {
+  width: 270px;
+  flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--surf);
+  border-right: 1px solid var(--bord);
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bord2) transparent;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: 7px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid var(--bord);
+}
+
+.card-title::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 6px var(--acc);
+  flex-shrink: 0;
+}
+
+.card-title.amber-dot::before { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+.card-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Ensure direct children of card-body don't shrink inside the sidebar flex column
+   so the sidebar can scroll instead of compressing controls. */
+.card-body > * {
+  flex: 0 0 auto;
+}
+
+/* ── FIELD ───────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 3px; }
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.03em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.field label .unit {
+  color: var(--acc);
+  font-size: 10px;
+}
+
+input[type="number"] {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--bord2);
+  border-radius: 4px;
+  color: var(--txt);
+  padding: 4px 7px;
+  width: 100%;
+  font-size: 13px;
+  font-family: 'Share Tech Mono', monospace;
+  transition: border-color 0.15s;
+}
+input[type="number"]:focus { outline: none; border-color: var(--acc); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  background: var(--bord2);
+  border-radius: 3px;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 6px rgba(0,180,216,0.5);
+  cursor: pointer;
+}
+input[type="range"].amber-range { background: rgba(252,165,34,0.25); }
+input[type="range"].amber-range::-webkit-slider-thumb {
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(252,165,34,0.5);
+}
+
+/* ── WIND TABLE ──────────────────────────────────── */
+.wind-row {
+  display: grid;
+  grid-template-columns: 62px 1fr 62px;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+}
+.wind-alt { color: var(--muted); }
+.wind-val {
+  color: var(--txt);
+  font-weight: 600;
+  text-align: right;
+  font-size: 12px;
+}
+.wind-val.pos { color: #5df; }
+.wind-val.neg { color: #f85; }
+
+/* ── GROUPS ──────────────────────────────────────── */
+.group-list { display: flex; flex-direction: column; gap: 4px; }
+
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+.group-item:hover { border-color: var(--bord2); background: rgba(30,45,70,0.5); }
+.group-item.dragging { opacity: 0.4; cursor: grabbing; }
+.group-item.drag-over { border-color: var(--acc); background: rgba(0,180,216,0.08); }
+
+.group-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 7px currentColor;
+}
+
+.group-name { flex: 1; font-size: 12px; font-weight: 500; }
+
+.group-meta {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.exit-badge {
+  background: var(--bord);
+  color: var(--acc);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.drag-handle {
+  color: var(--muted);
+  font-size: 14px;
+  cursor: grab;
+  opacity: 0.6;
+  padding: 0 2px;
+}
+
+/* ── TAU FIELDS ──────────────────────────────────── */
+.tau-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── VISUALIZATION ───────────────────────────────── */
+#visualization {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  position: relative;
+}
+
+#simCanvas {
+  flex: 1;
+  display: block;
+  min-height: 0;
+}
+
+/* ── ANIM CONTROLS ───────────────────────────────── */
+.anim-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: var(--surf);
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+#timeSlider {
+  flex: 1;
+  accent-color: var(--acc);
+}
+
+#timeLabel {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--acc);
+  min-width: 56px;
+  text-align: right;
+}
+
+select.speed-sel {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--bord2);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+}
+
+/* ── TOAST ───────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: rgba(0,180,216,0.15);
+  border: 1px solid var(--acc);
+  color: var(--acc);
+  padding: 8px 22px;
+  border-radius: 20px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── STATS BOX ───────────────────────────────────── */
+.stat-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.stat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bord2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:14px">
+    <h1>⟁ FREEFALL DRIFT</h1>
+    <span class="tagline">2D skydive separation simulator</span>
+  </div>
+  <div class="header-right">
+    <button class="amber" id="btnAnimate">▶ Animate</button>
+    <button class="primary" id="btnReset">↺ Reset View</button>
+    <button id="btnPermalink">⛓ Permalink</button>
+  </div>
+</header>
+
+<main>
+  <!-- ── CONTROLS ──────────────────────────────── -->
+  <aside id="controls">
+
+    <!-- General params -->
+    <div class="card">
+      <div class="card-title">Parameters</div>
+      <div class="card-body">
+        <div class="field">
+          <label>Exit Altitude <span class="unit">ft</span></label>
+          <input type="number" id="iExitAlt" value="13000" min="8000" max="18000" step="500">
+        </div>
+        <div class="field">
+          <label>Aircraft Speed <span class="unit">kts (IAS, into wind)</span></label>
+          <input type="number" id="iAircraftSpeed" value="70" min="40" max="120" step="1">
+        </div>
+        <div class="field">
+          <label>Group Spacing <span class="unit">seconds</span></label>
+          <input type="number" id="iSpacing" value="7" min="3" max="30" step="1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Wind profile -->
+    <div class="card">
+      <div class="card-title amber-dot">Wind Profile</div>
+      <div class="card-body" id="windPanel">
+        <!-- dynamically generated -->
+      </div>
+      <div style="padding:6px 10px 8px;font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;border-top:1px solid var(--bord)">
+        Negative = wind toward jumprun (downwind run effect)
+      </div>
+    </div>
+
+    <!-- Groups / exit order -->
+    <div class="card">
+      <div class="card-title">Exit Order <span style="margin-left:auto;font-size:9px;opacity:.6">drag to reorder</span></div>
+      <div class="card-body">
+        <div class="group-list" id="groupList"></div>
+      </div>
+    </div>
+
+    <!-- Deceleration model -->
+    <div class="card">
+      <div class="card-title">Horizontal Throw Decay (τ)</div>
+      <div class="card-body">
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:2px">
+          Time constant for deceleration from aircraft throw to wind equilibrium. Belly = fast, freefly = slow.
+        </div>
+        <div class="tau-grid">
+          <div class="field">
+            <label>Belly τ <span class="unit">sec</span></label>
+            <input type="number" id="iBellyTau" value="3.0" min="0.5" max="15" step="0.5">
+          </div>
+          <div class="field">
+            <label>Freefly τ <span class="unit">sec</span></label>
+            <input type="number" id="iFflyTau" value="7.5" min="0.5" max="25" step="0.5">
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace">
+          Smaller = decelerates faster from throw.<br>
+          At t=3τ, ~95% of throw has dissipated.
+        </div>
+      </div>
+    </div>
+
+    <!-- Fall speeds reference -->
+    <div class="card">
+      <div class="card-title">Fall Speeds (fixed)</div>
+      <div class="card-body" id="fallSpeedRef">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── VISUALIZATION ──────────────────────────── -->
+  <section id="visualization">
+    <canvas id="simCanvas"></canvas>
+    <div class="anim-bar">
+      <button class="sm" id="btnPlayPause" style="min-width:56px">▶ Play</button>
+      <button class="sm" id="btnRewind">⏮</button>
+      <input type="range" id="timeSlider" min="0" max="100" value="0" step="0.5">
+      <span id="timeLabel">T+0.0s</span>
+      <select class="speed-sel" id="speedSel">
+        <option value="2">2×</option>
+        <option value="5">5×</option>
+        <option value="10" selected>10×</option>
+        <option value="20">20×</option>
+        <option value="50">50×</option>
+      </select>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CONSTANTS & GROUP DEFINITIONS
+// ─────────────────────────────────────────────────────────────────────────────
+const FT_TO_M   = 0.3048;
+const KTS_TO_MS = 0.51444;
+const KPH_TO_MS = 1 / 3.6;
+const DT        = 0.1;   // simulation timestep (s)
+
+const PULL_ALT_FT = 3200;
+const PULL_ALT_M  = PULL_ALT_FT * FT_TO_M;
+
+const WIND_ALTS_FT = [12000, 9000, 6000, 3000];
+
+const GROUP_DEFS = [
+  { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 200, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
+  { id: 'smallBelly',  name: 'Small Belly',  vFall_kph: 220, family: 'belly',   color: '#ffe234', colorDim: 'rgba(255,226,52,0.25)'  },
+  { id: 'slowFreefly', name: 'Slow Freefly', vFall_kph: 270, family: 'freefly', color: '#00d2d3', colorDim: 'rgba(0,210,211,0.25)'   },
+  { id: 'fastFreefly', name: 'Fast Freefly', vFall_kph: 300, family: 'freefly', color: '#ff5e57', colorDim: 'rgba(255,94,87,0.25)'   },
+];
+
+const GROUP_BY_ID = Object.fromEntries(GROUP_DEFS.map(g => [g.id, g]));
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let settings = {
+  exitAlt_ft:       13000,
+  aircraftSpeed_kts: 70,
+  spacing_s:         7,
+  wind: { 12000: 20, 9000: 18, 6000: 15, 3000: 12 },
+  groups:            ['bigBelly','smallBelly','slowFreefly','fastFreefly'],
+  bellyTau:          3.0,
+  fflyTau:           7.5,
+};
+
+let simResults   = [];
+let animTime     = 0;
+let animMaxTime  = 60;
+let animRunning  = false;
+let animLastTs   = null;
+let animSpeed    = 10;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PHYSICS
+// ─────────────────────────────────────────────────────────────────────────────
+function getWindAt_ms(alt_m) {
+  const altsFt = [3000, 6000, 9000, 12000];
+  const altsM  = altsFt.map(f => f * FT_TO_M);
+  const speeds = altsFt.map(f => (settings.wind[f] || 0) * KTS_TO_MS);
+
+  if (alt_m <= altsM[0]) return speeds[0];
+  if (alt_m >= altsM[altsM.length - 1]) return speeds[speeds.length - 1];
+
+  for (let i = 0; i < altsM.length - 1; i++) {
+    if (alt_m >= altsM[i] && alt_m <= altsM[i + 1]) {
+      const t = (alt_m - altsM[i]) / (altsM[i + 1] - altsM[i]);
+      return speeds[i] + t * (speeds[i + 1] - speeds[i]);
+    }
+  }
+  return speeds[speeds.length - 1];
+}
+
+function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
+  const k = 1 / tau_s;
+  let x  = exitX_m;
+  let z  = exitAlt_m;
+  let vx = vx_initial;
+
+  const traj = [{ x, z }];
+
+  while (z > PULL_ALT_M) {
+    const wind = getWindAt_ms(z);
+    vx += -k * (vx - wind) * DT;
+    x  += vx * DT;
+    z  -= vFall_ms * DT;
+    traj.push({ x, z });
+  }
+
+  // clamp last point to pull altitude
+  const last = traj[traj.length - 1];
+  if (last.z < PULL_ALT_M) traj[traj.length - 1] = { x: last.x, z: PULL_ALT_M };
+
+  return traj;
+}
+
+function runSim() {
+  const exitAlt_m   = settings.exitAlt_ft * FT_TO_M;
+  const windAtExit  = getWindAt_ms(exitAlt_m);
+
+  // Aircraft flies INTO wind → ground velocity = -(IAS) + wind
+  const aircraftGndVx = -settings.aircraftSpeed_kts * KTS_TO_MS + windAtExit;
+
+  const results = [];
+
+  for (let i = 0; i < settings.groups.length; i++) {
+    const gid     = settings.groups[i];
+    const def     = GROUP_BY_ID[gid];
+    const exitTime = i * settings.spacing_s;
+    const exitX    = aircraftGndVx * exitTime;   // aircraft position at exit
+
+    const tau    = def.family === 'belly' ? settings.bellyTau : settings.fflyTau;
+    const vFall  = def.vFall_kph * KPH_TO_MS;
+    const traj   = simulateGroup(exitX, exitAlt_m, aircraftGndVx, vFall, tau);
+
+    // fall time in seconds (number of DT steps)
+    const fallTime = (traj.length - 1) * DT;
+
+    results.push({
+      gid, def,
+      color:     def.color,
+      colorDim:  def.colorDim,
+      exitTime,
+      exitX,
+      pullTime:  exitTime + fallTime,
+      pullX:     traj[traj.length - 1].x,
+      fallTime,
+      traj,
+    });
+  }
+
+  simResults  = results;
+  animMaxTime = Math.max(...results.map(r => r.pullTime)) + 2;
+
+  return results;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CANVAS RENDERING
+// ─────────────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('simCanvas');
+const ctx    = canvas.getContext('2d');
+
+let viewBounds = null;   // cached { xMin, xMax, yMin, yMax }
+
+function computeViewBounds(results) {
+  if (!results.length) return { xMin: -500, xMax: 500, yMin: PULL_ALT_M, yMax: settings.exitAlt_ft * FT_TO_M };
+
+  let xMin = Infinity, xMax = -Infinity;
+  for (const r of results) {
+    for (const p of r.traj) {
+      if (p.x < xMin) xMin = p.x;
+      if (p.x > xMax) xMax = p.x;
+    }
+  }
+  const xRange = xMax - xMin || 200;
+  const xPad   = xRange * 0.12 + 60;
+
+  return {
+    xMin: xMin - xPad,
+    xMax: xMax + xPad,
+    yMin: PULL_ALT_M - 100,
+    yMax: settings.exitAlt_ft * FT_TO_M + 150,
+  };
+}
+
+function getInterpolatedPos(traj, elapsed_s) {
+  const idx = elapsed_s / DT;
+  const i   = Math.floor(idx);
+  const frac = idx - i;
+  if (i >= traj.length - 1) return traj[traj.length - 1];
+  if (i < 0) return traj[0];
+  const a = traj[i], b = traj[i + 1];
+  return {
+    x: a.x + (b.x - a.x) * frac,
+    z: a.z + (b.z - a.z) * frac,
+  };
+}
+
+function getTrajUpTo(traj, elapsed_s) {
+  const maxIdx = Math.min(Math.floor(elapsed_s / DT) + 1, traj.length);
+  return traj.slice(0, maxIdx);
+}
+
+function renderCanvas(t) {
+  const W = canvas.width;
+  const H = canvas.height;
+
+  if (!viewBounds || !W || !H) return;
+
+  const PAD = { top: 36, right: 24, bottom: 52, left: 68 };
+  const PW  = W - PAD.left - PAD.right;
+  const PH  = H - PAD.top - PAD.bottom;
+
+  const { xMin, xMax, yMin, yMax } = viewBounds;
+
+  const tx = x => PAD.left + (x - xMin) / (xMax - xMin) * PW;
+  const ty = y => PAD.top + PH - (y - yMin) / (yMax - yMin) * PH;
+
+  // ── background ────────────────────────────────────────────
+  ctx.fillStyle = '#06080f';
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle star noise
+  ctx.fillStyle = 'rgba(180,210,255,0.03)';
+  for (let i = 0; i < 200; i++) {
+    const sx = (i * 137.5) % W;
+    const sy = (i * 97.3)  % H;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+
+  // clip to plot area
+  ctx.save();
+  ctx.rect(PAD.left, PAD.top, PW, PH);
+  ctx.clip();
+
+  // ── vertical grid lines (every ~100m) ─────────────────────
+  const xSpanM = xMax - xMin;
+  const xTickM = niceStep(xSpanM / 6);
+  const x0grid = Math.ceil(xMin / xTickM) * xTickM;
+  ctx.strokeStyle = 'rgba(30,60,100,0.45)';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([]);
+  for (let xg = x0grid; xg <= xMax; xg += xTickM) {
+    const cx = tx(xg);
+    ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + PH);
+    ctx.stroke();
+  }
+
+  // ── horizontal altitude lines ──────────────────────────────
+  const altBands = [3000, 6000, 9000, 12000].map(f => f * FT_TO_M);
+  altBands.forEach((am, i) => {
+    const cy = ty(am);
+    if (cy < PAD.top || cy > PAD.top + PH) return;
+
+    // subtle altitude band fill
+    if (i < altBands.length - 1) {
+      const cy2 = ty(altBands[i + 1]);
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(15,25,45,0.3)' : 'rgba(10,18,35,0.15)';
+      ctx.fillRect(PAD.left, Math.min(cy, cy2), PW, Math.abs(cy - cy2));
+    }
+
+    ctx.strokeStyle = 'rgba(40,80,130,0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + PW, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // ── pull altitude line ─────────────────────────────────────
+  {
+    const cy = ty(PULL_ALT_M);
+    ctx.strokeStyle = 'rgba(252,165,34,0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + PW, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(252,165,34,0.8)';
+    ctx.font = '10px "Share Tech Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`PULL ${PULL_ALT_FT.toLocaleString()}ft`, PAD.left + 5, cy - 4);
+  }
+
+  // ── exit altitude line ─────────────────────────────────────
+  {
+    const ey = ty(settings.exitAlt_ft * FT_TO_M);
+    if (ey >= PAD.top && ey <= PAD.top + PH) {
+      ctx.strokeStyle = 'rgba(0,180,216,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 6]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, ey); ctx.lineTo(PAD.left + PW, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // ── wind arrows on left panel ──────────────────────────────
+  WIND_ALTS_FT.forEach(aft => {
+    const am  = aft * FT_TO_M;
+    const cy  = ty(am);
+    if (cy < PAD.top || cy > PAD.top + PH) return;
+    const w   = settings.wind[aft] || 0;
+    const spd = Math.abs(w) * KTS_TO_MS;
+    const len = Math.min(spd * 1.8, 22);
+    const dir = w >= 0 ? 1 : -1;
+    const ax  = PAD.left + (dir > 0 ? 12 : 42);
+    const ae  = ax + dir * len;
+    ctx.strokeStyle = 'rgba(0,180,216,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ax, cy); ctx.lineTo(ae, cy);
+    ctx.stroke();
+    // arrowhead
+    ctx.fillStyle = 'rgba(0,180,216,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(ae, cy);
+    ctx.lineTo(ae - dir*5, cy - 3);
+    ctx.lineTo(ae - dir*5, cy + 3);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // ── draw trajectories ──────────────────────────────────────
+  const animMode = t > 0;
+
+  for (const r of simResults) {
+    const displayTraj = animMode
+      ? (t >= r.exitTime ? getTrajUpTo(r.traj, t - r.exitTime) : [])
+      : r.traj;
+
+    if (displayTraj.length < 2) continue;
+
+    // main trace
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth   = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(tx(displayTraj[0].x), ty(displayTraj[0].z));
+    for (let i = 1; i < displayTraj.length; i++) {
+      ctx.lineTo(tx(displayTraj[i].x), ty(displayTraj[i].z));
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ghost full path in anim mode
+    if (animMode && t >= r.exitTime) {
+      ctx.strokeStyle = r.colorDim;
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(tx(r.traj[0].x), ty(r.traj[0].z));
+      for (let i = 1; i < r.traj.length; i++) {
+        ctx.lineTo(tx(r.traj[i].x), ty(r.traj[i].z));
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // ── exit points & labels ───────────────────────────────────
+  for (let ri = 0; ri < simResults.length; ri++) {
+    const r = simResults[ri];
+    if (animMode && t < r.exitTime) continue;
+
+    const ep = r.traj[0];
+    const cx = tx(ep.x), cy = ty(ep.z);
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = r.color;
+    ctx.fill();
+    ctx.strokeStyle = '#06080f';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // group label at exit
+    ctx.fillStyle = r.color;
+    ctx.font = '10px "Share Tech Mono", monospace';
+    ctx.textAlign = 'center';
+    const labelY = cy - 12;
+    ctx.fillText(`#${ri + 1} ${r.def.name}`, cx, labelY);
+  }
+
+  // ── current position markers (animation) ──────────────────
+  if (animMode) {
+    for (const r of simResults) {
+      if (t < r.exitTime || t > r.pullTime + 1) continue;
+      const elapsed = Math.min(t - r.exitTime, r.fallTime);
+      const pos = getInterpolatedPos(r.traj, elapsed);
+      const cx  = tx(pos.x), cy = ty(pos.z);
+
+      // glow ring
+      const grd = ctx.createRadialGradient(cx, cy, 2, cx, cy, 12);
+      grd.addColorStop(0, r.color + 'cc');
+      grd.addColorStop(1, r.color + '00');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = r.color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // ── pull altitude separation arrows (static mode) ─────────
+  if (!animMode && simResults.length > 1) {
+    const pullY = ty(PULL_ALT_M);
+    const pullPts = simResults.map(r => ({ x: tx(r.pullX), r }));
+    pullPts.sort((a, b) => a.x - b.x);
+
+    // arrows between adjacent groups at pull altitude
+    for (let i = 0; i < pullPts.length - 1; i++) {
+      const a = pullPts[i], b = pullPts[i + 1];
+      const midX = (a.x + b.x) / 2;
+      const sepM = Math.abs(simResults.find(r=>r===b.r).pullX - simResults.find(r=>r===a.r).pullX);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, pullY + 12);
+      ctx.lineTo(b.x, pullY + 12);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = 'rgba(200,220,255,0.65)';
+      ctx.font = '10px "Share Tech Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${Math.round(sepM)}m`, midX, pullY + 25);
+    }
+
+    // pull-point dots per group
+    for (const { x, r } of pullPts) {
+      ctx.beginPath();
+      ctx.arc(x, pullY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = r.color;
+      ctx.fill();
+      ctx.strokeStyle = '#06080f';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+
+  // ── Y axis (altitude labels) ───────────────────────────────
+  ctx.fillStyle = 'rgba(100,140,200,0.7)';
+  ctx.font = '10px "Share Tech Mono", monospace';
+  ctx.textAlign = 'right';
+
+  [3000, 6000, 9000, 12000, settings.exitAlt_ft].forEach(aft => {
+    const am = aft * FT_TO_M;
+    const cy = ty(am);
+    if (cy < PAD.top - 2 || cy > PAD.top + PH + 2) return;
+    ctx.fillText(`${aft.toLocaleString()}\'`, PAD.left - 6, cy + 4);
+    // tick
+    ctx.fillStyle = 'rgba(60,100,160,0.7)';
+    ctx.fillRect(PAD.left - 4, cy - 0.5, 4, 1);
+    ctx.fillStyle = 'rgba(100,140,200,0.7)';
+  });
+
+  // Y axis label
+  ctx.save();
+  ctx.translate(12, PAD.top + PH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.font = '10px "Outfit", sans-serif';
+  ctx.fillStyle = 'rgba(74,96,128,0.9)';
+  ctx.textAlign = 'center';
+  ctx.fillText('Altitude (ft)', 0, 0);
+  ctx.restore();
+
+  // ── X axis (horizontal distance labels) ───────────────────
+  ctx.fillStyle = 'rgba(100,140,200,0.7)';
+  ctx.font      = '10px "Share Tech Mono", monospace';
+  ctx.textAlign = 'center';
+
+  const x0tick = Math.ceil(xMin / xTickM) * xTickM;
+  for (let xg = x0tick; xg <= xMax; xg += xTickM) {
+    const cx = tx(xg);
+    if (cx < PAD.left || cx > PAD.left + PW) continue;
+    ctx.fillText(`${Math.round(xg)}m`, cx, PAD.top + PH + 14);
+    ctx.fillStyle = 'rgba(60,100,160,0.7)';
+    ctx.fillRect(cx - 0.5, PAD.top + PH, 1, 4);
+    ctx.fillStyle = 'rgba(100,140,200,0.7)';
+  }
+
+  // X axis center label
+  ctx.fillStyle = 'rgba(74,96,128,0.9)';
+  ctx.font = '10px "Outfit", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('← Upwind   Horizontal Position (m)   Downwind →', PAD.left + PW / 2, PAD.top + PH + 28);
+
+  // ── wind arrow legend top-right ────────────────────────────
+  ctx.font = '10px "Share Tech Mono", monospace';
+  ctx.fillStyle = 'rgba(0,180,216,0.6)';
+  ctx.textAlign = 'right';
+  ctx.fillText('← wind arrows', PAD.left + PW, PAD.top - 6);
+
+  // ── frame time label (static / anim) ──────────────────────
+  if (animMode) {
+    ctx.font = '11px "Share Tech Mono", monospace';
+    ctx.fillStyle = 'rgba(252,165,34,0.7)';
+    ctx.textAlign = 'left';
+    ctx.fillText(`T + ${t.toFixed(1)}s`, PAD.left + 6, PAD.top + 14);
+  }
+}
+
+function niceStep(approx) {
+  const mag = Math.pow(10, Math.floor(Math.log10(approx)));
+  const frac = approx / mag;
+  if (frac < 1.5) return mag;
+  if (frac < 3.5) return 2 * mag;
+  if (frac < 7.5) return 5 * mag;
+  return 10 * mag;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RESIZE & RERENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = Math.floor(rect.width);
+  canvas.height = Math.floor(rect.height - 44); // subtract anim bar
+  if (canvas.height < 100) canvas.height = 100;
+  renderCanvas(animTime);
+}
+
+const ro = new ResizeObserver(resizeCanvas);
+ro.observe(canvas.parentElement);
+
+function recompute() {
+  runSim();
+  viewBounds = computeViewBounds(simResults);
+  updateGroupList();
+  updateStatsBox();
+  updateSlider();
+  renderCanvas(animTime);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ANIMATION
+// ─────────────────────────────────────────────────────────────────────────────
+function animLoop(ts) {
+  if (!animRunning) return;
+  if (animLastTs !== null) {
+    const dt = (ts - animLastTs) / 1000;
+    animTime = Math.min(animTime + dt * animSpeed, animMaxTime);
+    document.getElementById('timeSlider').value = animTime;
+    updateTimeLabel();
+  }
+  animLastTs = ts;
+  renderCanvas(animTime);
+  if (animTime < animMaxTime) {
+    requestAnimationFrame(animLoop);
+  } else {
+    animRunning  = false;
+    animLastTs   = null;
+    animTime     = animMaxTime;
+    document.getElementById('btnPlayPause').textContent = '▶ Play';
+  }
+}
+
+function toggleAnim() {
+  if (animRunning) {
+    animRunning = false;
+    animLastTs  = null;
+    document.getElementById('btnPlayPause').textContent = '▶ Play';
+    document.getElementById('btnAnimate').textContent   = '▶ Animate';
+  } else {
+    if (animTime >= animMaxTime) animTime = 0;
+    animRunning = true;
+    animLastTs  = null;
+    document.getElementById('btnPlayPause').textContent = '⏸ Pause';
+    document.getElementById('btnAnimate').textContent   = '⏸ Pause';
+    requestAnimationFrame(animLoop);
+  }
+}
+
+function updateSlider() {
+  const sl = document.getElementById('timeSlider');
+  sl.max   = animMaxTime.toFixed(1);
+  sl.step  = 0.5;
+}
+
+function updateTimeLabel() {
+  document.getElementById('timeLabel').textContent = `T+${animTime.toFixed(1)}s`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  UI SETUP
+// ─────────────────────────────────────────────────────────────────────────────
+function buildWindPanel() {
+  const panel = document.getElementById('windPanel');
+  panel.innerHTML = '';
+
+  WIND_ALTS_FT.forEach(aft => {
+    const w   = settings.wind[aft];
+    const row = document.createElement('div');
+    row.className = 'wind-row';
+    row.innerHTML = `
+      <span class="wind-alt">${aft.toLocaleString()}ft</span>
+      <input type="range" id="wSlider${aft}" min="-40" max="40" step="1" value="${w}">
+      <span class="wind-val ${w >= 0 ? 'pos' : 'neg'}" id="wVal${aft}">${w > 0 ? '+' : ''}${w} kts</span>
+    `;
+    panel.appendChild(row);
+
+    const slider = row.querySelector(`#wSlider${aft}`);
+    const valEl  = row.querySelector(`#wVal${aft}`);
+    slider.addEventListener('input', () => {
+      const v = +slider.value;
+      settings.wind[aft] = v;
+      valEl.textContent  = (v > 0 ? '+' : '') + v + ' kts';
+      valEl.className    = `wind-val ${v >= 0 ? 'pos' : 'neg'}`;
+      recompute();
+    });
+  });
+}
+
+function buildGroupList() {
+  updateGroupList();
+}
+
+function updateGroupList() {
+  const list = document.getElementById('groupList');
+  list.innerHTML = '';
+
+  settings.groups.forEach((gid, i) => {
+    const def  = GROUP_BY_ID[gid];
+    const tau  = def.family === 'belly' ? settings.bellyTau : settings.fflyTau;
+    const item = document.createElement('div');
+    item.className = 'group-item';
+    item.draggable = true;
+    item.dataset.gid = gid;
+
+    const pullX  = simResults[i]?.pullX;
+    const pullStr = pullX !== undefined ? `↓ pull: ${Math.round(pullX)}m` : '';
+
+    item.innerHTML = `
+      <span class="drag-handle">⠿</span>
+      <span class="group-dot" style="background:${def.color};color:${def.color}"></span>
+      <span class="group-name">${def.name}</span>
+      <div class="group-meta">
+        <span class="exit-badge">#${i + 1} T+${i * settings.spacing_s}s</span>
+        <span style="color:var(--muted);font-size:10px;">${def.vFall_kph} kph · τ=${tau}s</span>
+        ${pullStr ? `<span style="color:${def.color};font-size:10px;">${pullStr}</span>` : ''}
+      </div>
+    `;
+
+    item.addEventListener('dragstart', onDragStart);
+    item.addEventListener('dragover',  onDragOver);
+    item.addEventListener('dragleave', onDragLeave);
+    item.addEventListener('drop',      onDrop);
+    item.addEventListener('dragend',   onDragEnd);
+    list.appendChild(item);
+  });
+}
+
+let dragSrc = null;
+
+function onDragStart(e) {
+  dragSrc = this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', this.dataset.gid);
+}
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.group-item').forEach(el => el.classList.remove('drag-over'));
+  this.classList.add('drag-over');
+}
+function onDragLeave() { this.classList.remove('drag-over'); }
+function onDragEnd()   { document.querySelectorAll('.group-item').forEach(el => { el.classList.remove('dragging'); el.classList.remove('drag-over'); }); }
+function onDrop(e) {
+  e.preventDefault();
+  if (dragSrc === this) return;
+  const fromId = dragSrc.dataset.gid;
+  const toId   = this.dataset.gid;
+  const fi     = settings.groups.indexOf(fromId);
+  const ti     = settings.groups.indexOf(toId);
+  settings.groups.splice(fi, 1);
+  settings.groups.splice(ti, 0, fromId);
+  recompute();
+}
+
+function buildFallSpeedRef() {
+  const el = document.getElementById('fallSpeedRef');
+  el.innerHTML = GROUP_DEFS.map(g => `
+    <div class="stat-badge">
+      <span class="stat-dot" style="background:${g.color}"></span>
+      <span style="color:${g.color};font-weight:600;min-width:90px">${g.name}</span>
+      <span style="color:var(--muted)">${g.vFall_kph} kph / ${Math.round(g.vFall_kph * KPH_TO_MS * 100)/100} m/s</span>
+    </div>
+  `).join('');
+}
+
+function updateStatsBox() {
+  // Update stats in the group list (handled in updateGroupList)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INPUT BINDINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function bindInputs() {
+  const bind = (id, key, transform) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const v = transform(el.value);
+      if (!isNaN(v)) { settings[key] = v; recompute(); }
+    });
+    el.addEventListener('change', () => {
+      const v = transform(el.value);
+      if (!isNaN(v)) { settings[key] = v; recompute(); }
+    });
+  };
+
+  bind('iExitAlt',       'exitAlt_ft',        Number);
+  bind('iAircraftSpeed', 'aircraftSpeed_kts',  Number);
+  bind('iSpacing',       'spacing_s',          Number);
+  bind('iBellyTau',      'bellyTau',           Number);
+  bind('iFflyTau',       'fflyTau',            Number);
+
+  // animation controls
+  document.getElementById('btnPlayPause').addEventListener('click', toggleAnim);
+  document.getElementById('btnRewind').addEventListener('click', () => {
+    animRunning = false; animLastTs = null; animTime = 0;
+    document.getElementById('btnPlayPause').textContent = '▶ Play';
+    document.getElementById('btnAnimate').textContent   = '▶ Animate';
+    document.getElementById('timeSlider').value = 0;
+    updateTimeLabel();
+    renderCanvas(0);
+  });
+  document.getElementById('btnAnimate').addEventListener('click', toggleAnim);
+
+  document.getElementById('timeSlider').addEventListener('input', e => {
+    animTime = +e.target.value;
+    updateTimeLabel();
+    renderCanvas(animTime);
+  });
+
+  document.getElementById('speedSel').addEventListener('change', e => {
+    animSpeed = +e.target.value;
+  });
+
+  document.getElementById('btnReset').addEventListener('click', () => {
+    viewBounds = computeViewBounds(simResults);
+    animRunning = false; animLastTs = null; animTime = 0;
+    document.getElementById('btnPlayPause').textContent = '▶ Play';
+    document.getElementById('btnAnimate').textContent   = '▶ Animate';
+    document.getElementById('timeSlider').value = 0;
+    updateTimeLabel();
+    renderCanvas(0);
+  });
+
+  document.getElementById('btnPermalink').addEventListener('click', copyPermalink);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PERMALINK
+// ─────────────────────────────────────────────────────────────────────────────
+function encodeSettings() {
+  return btoa(JSON.stringify(settings));
+}
+
+function decodeSettings(hash) {
+  try {
+    const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+    return JSON.parse(atob(decodeURIComponent(raw)));
+  } catch { return null; }
+}
+
+function copyPermalink() {
+  const url = location.origin + location.pathname + '#' + encodeURIComponent(encodeSettings());
+  navigator.clipboard.writeText(url).then(() => showToast('📋 Permalink copied!')).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); showToast('📋 Permalink copied!');
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function applySettingsToUI() {
+  document.getElementById('iExitAlt').value       = settings.exitAlt_ft;
+  document.getElementById('iAircraftSpeed').value = settings.aircraftSpeed_kts;
+  document.getElementById('iSpacing').value       = settings.spacing_s;
+  document.getElementById('iBellyTau').value      = settings.bellyTau;
+  document.getElementById('iFflyTau').value       = settings.fflyTau;
+
+  WIND_ALTS_FT.forEach(aft => {
+    const sl = document.getElementById(`wSlider${aft}`);
+    const vl = document.getElementById(`wVal${aft}`);
+    if (sl) {
+      const v = settings.wind[aft] || 0;
+      sl.value = v;
+      vl.textContent = (v > 0 ? '+' : '') + v + ' kts';
+      vl.className   = `wind-val ${v >= 0 ? 'pos' : 'neg'}`;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+  // Check for permalink
+  if (location.hash) {
+    const decoded = decodeSettings(location.hash);
+    if (decoded) settings = { ...settings, ...decoded };
+  }
+
+  buildWindPanel();
+  buildGroupList();
+  buildFallSpeedRef();
+  bindInputs();
+  applySettingsToUI();
+
+  recompute();
+}
+
+init();
+</script>
+</body>
+</html>
