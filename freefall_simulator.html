@@ -521,6 +521,10 @@ const PULL_ALT_M  = PULL_ALT_FT * FT_TO_M;
 
 const WIND_ALTS_FT = [12000, 9000, 6000, 3000];
 
+const CANOPY_SINK_FPM = 1000;             // feet per minute (not user-editable)
+const CANOPY_SINK_MS  = CANOPY_SINK_FPM * FT_TO_M / 60;
+const CANOPY_SIM_TIME = 18;               // seconds past pull to continue drawing canopy drift
+
 const GROUP_DEFS = [
   { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 200, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
   { id: 'smallBelly',  name: 'Small Belly',  vFall_kph: 220, family: 'belly',   color: '#ffe234', colorDim: 'rgba(255,226,52,0.25)'  },
@@ -543,6 +547,8 @@ let settings = {
   groups:            ['bigBelly','smallBelly','slowFreefly','fastFreefly'],
   bellyTau:          4.0,
   fflyTau:           6.5,
+  canopySinkFpm:     1000,
+  aircraftGndVx_ms:  null,
 };
 
 let simResults   = [];
@@ -579,20 +585,47 @@ function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
   let vx = vx_initial;
 
   const traj = [{ x, z }];
+  let freefallTime = 0;
 
   while (z > PULL_ALT_M) {
     const wind = getWindAt_ms(z);
     vx += -k * (vx - wind) * DT;
     x  += vx * DT;
     z  -= vFall_ms * DT;
+    if (z < PULL_ALT_M) z = PULL_ALT_M;
     traj.push({ x, z });
+    freefallTime += DT;
+    if (z <= PULL_ALT_M) break;
   }
 
-  // clamp last point to pull altitude
-  const last = traj[traj.length - 1];
-  if (last.z < PULL_ALT_M) traj[traj.length - 1] = { x: last.x, z: PULL_ALT_M };
+  const pullX = traj[traj.length - 1].x;
+  const pullTime = freefallTime;
 
-  return traj;
+  // Canopy drift after pull (down to maybe landing), with configurable canopy sink speed from settings
+  const canopyTau = 3.0;
+  const canopyK   = 1 / canopyTau;
+  const canopySinkMs = settings.canopySinkFpm * FT_TO_M / 60;
+  let canopyTime = 0;
+
+  while (canopyTime < CANOPY_SIM_TIME && z > 0) {
+    const wind = getWindAt_ms(z);
+    vx += -canopyK * (vx - wind) * DT;
+    x  += vx * DT;
+    z  -= canopySinkMs * DT;
+    if (z < 0) z = 0;
+    traj.push({ x, z });
+    canopyTime += DT;
+  }
+
+  const totalTime = pullTime + canopyTime;
+
+  return {
+    traj,
+    pullX,
+    pullTime,
+    fallTime: freefallTime,
+    totalTime,
+  };
 }
 
 function runSim() {
@@ -610,6 +643,8 @@ function runSim() {
   // Aircraft flies INTO wind → ground velocity (m/s) = -TAS + wind
   const aircraftGndVx = -tas_kts * KTS_TO_MS + windAtExit_ms;
 
+  settings.aircraftGndVx_ms = aircraftGndVx;
+
   const results = [];
 
   for (let i = 0; i < settings.groups.length; i++) {
@@ -620,10 +655,7 @@ function runSim() {
 
     const tau    = def.family === 'belly' ? settings.bellyTau : settings.fflyTau;
     const vFall  = def.vFall_kph * KPH_TO_MS;
-    const traj   = simulateGroup(exitX, exitAlt_m, aircraftGndVx, vFall, tau);
-
-    // fall time in seconds (number of DT steps)
-    const fallTime = (traj.length - 1) * DT;
+    const sim    = simulateGroup(exitX, exitAlt_m, aircraftGndVx, vFall, tau);
 
     results.push({
       gid, def,
@@ -631,15 +663,16 @@ function runSim() {
       colorDim:  def.colorDim,
       exitTime,
       exitX,
-      pullTime:  exitTime + fallTime,
-      pullX:     traj[traj.length - 1].x,
-      fallTime,
-      traj,
+      pullTime:  exitTime + sim.pullTime,
+      pullX:     sim.pullX,
+      fallTime:  sim.fallTime,
+      totalTime: sim.totalTime,
+      traj:      sim.traj,
     });
   }
 
   simResults  = results;
-  animMaxTime = Math.max(...results.map(r => r.pullTime)) + 2;
+  animMaxTime = Math.max(...results.map(r => r.exitTime + r.totalTime)) + 2;
 
   return results;
 }
@@ -847,6 +880,18 @@ function renderCanvas(t) {
     }
   }
 
+  // ── aircraft representation ─────────────────────────────────
+  if (animMode && settings.aircraftGndVx_ms !== null) {
+    const exitAlt_m = settings.exitAlt_ft * FT_TO_M;
+    const aircraftX = settings.aircraftGndVx_ms * t;
+    const cx = tx(aircraftX);
+    const cy = ty(exitAlt_m);
+    ctx.font = '16px serif';
+    ctx.fillStyle = '#c8d8f0';
+    ctx.textAlign = 'center';
+    ctx.fillText('<=|=', cx, cy - 10);
+  }
+
   // ── exit points & labels ───────────────────────────────────
   for (let ri = 0; ri < simResults.length; ri++) {
     const r = simResults[ri];
@@ -874,8 +919,9 @@ function renderCanvas(t) {
   // ── current position markers (animation) ──────────────────
   if (animMode) {
     for (const r of simResults) {
-      if (t < r.exitTime || t > r.pullTime + 1) continue;
-      const elapsed = Math.min(t - r.exitTime, r.fallTime);
+      const endTime = r.exitTime + (r.totalTime || r.fallTime || 0);
+      if (t < r.exitTime || t > endTime + 1) continue;
+      const elapsed = Math.min(t - r.exitTime, r.totalTime || r.fallTime);
       const pos = getInterpolatedPos(r.traj, elapsed);
       const cx  = tx(pos.x), cy = ty(pos.z);
 
@@ -1180,13 +1226,23 @@ function onDrop(e) {
 
 function buildFallSpeedRef() {
   const el = document.getElementById('fallSpeedRef');
-  el.innerHTML = GROUP_DEFS.map(g => `
+  const groupHtml = GROUP_DEFS.map(g => `
     <div class="stat-badge">
       <span class="stat-dot" style="background:${g.color}"></span>
       <span style="color:${g.color};font-weight:600;min-width:90px">${g.name}</span>
       <span style="color:var(--muted)">${g.vFall_kph} kph / ${Math.round(g.vFall_kph * KPH_TO_MS * 100)/100} m/s</span>
     </div>
   `).join('');
+
+  const canopyHtml = `
+    <div class="stat-badge">
+      <span class="stat-dot" style="background:#6fcf97"></span>
+      <span style="color:#6fcf97;font-weight:600;min-width:90px">Canopy sink</span>
+      <span style="color:var(--muted)">${settings.canopySinkFpm} fpm / ${(settings.canopySinkFpm * FT_TO_M / 60).toFixed(2)} m/s</span>
+    </div>
+  `;
+
+  el.innerHTML = groupHtml + canopyHtml;
 }
 
 function updateStatsBox() {
