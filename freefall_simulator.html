@@ -521,10 +521,10 @@ const PULL_ALT_M  = PULL_ALT_FT * FT_TO_M;
 
 const WIND_ALTS_FT = [12000, 9000, 6000, 3000];
 
-const CANOPY_SINK_FPM = 1000;             // feet per minute (not user-editable)
+const CANOPY_SINK_FPM = 1000;
 const CANOPY_SINK_MS  = CANOPY_SINK_FPM * FT_TO_M / 60;
-const CANOPY_SIM_TIME = 18;               // seconds past pull to continue drawing canopy drift
-const MIN_SEPARATION_M = 200;             // minimal safe separation in meters
+const CANOPY_SIM_TIME = 18;
+const MIN_SEPARATION_M = 200;
 
 const GROUP_DEFS = [
   { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 180, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
@@ -548,7 +548,7 @@ let settings = {
   groups:            ['bigBelly','smallBelly','slowFreefly','fastFreefly'],
   bellyTau:          4.0,
   fflyTau:           6.5,
-  canopySinkFpm:     1000,
+  canopySinkFpm:     CANOPY_SINK_FPM,
   aircraftGndVx_ms:  null,
 };
 
@@ -579,6 +579,12 @@ function getWindAt_ms(alt_m) {
   return speeds[speeds.length - 1];
 }
 
+function getDensityScale(alt_m) {
+  const rho0 = 1.225;
+  const rho = rho0 * Math.pow(Math.max(0, 1 - 0.00000687535 * alt_m), 4.255877);
+  return rho > 0 ? Math.sqrt(rho0 / rho) : 1.0;
+}
+
 function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
   const k = 1 / tau_s;
   let x  = exitX_m;
@@ -592,7 +598,8 @@ function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
     const wind = getWindAt_ms(z);
     vx += -k * (vx - wind) * DT;
     x  += vx * DT;
-    z  -= vFall_ms * DT;
+    const airspeedScale = getDensityScale(z);
+    z  -= vFall_ms * airspeedScale * DT;
     if (z < PULL_ALT_M) z = PULL_ALT_M;
     traj.push({ x, z });
     freefallTime += DT;
