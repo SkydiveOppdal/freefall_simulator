@@ -524,7 +524,11 @@ const WIND_ALTS_FT = [12000, 9000, 6000, 3000];
 const CANOPY_SINK_FPM = 1000;
 const CANOPY_SINK_MS  = CANOPY_SINK_FPM * FT_TO_M / 60;
 const CANOPY_SIM_TIME = 18;
-const MIN_SEPARATION_M = 200;
+const MIN_SEPARATION_M = 250;
+
+const LAPSE_RATE = 0.0065; // K/m, ISA troposphere
+const T0 = 288.15; // K, sea level temperature
+const RHO0 = 1.225; // kg/m3, sea level density
 
 const GROUP_DEFS = [
   { id: 'bigBelly',    name: 'Big Belly',    vFall_kph: 180, family: 'belly',   color: '#ff9f43', colorDim: 'rgba(255,159,67,0.25)'  },
@@ -580,9 +584,8 @@ function getWindAt_ms(alt_m) {
 }
 
 function getDensityScale(alt_m) {
-  const rho0 = 1.225;
-  const rho = rho0 * Math.pow(Math.max(0, 1 - 0.00000687535 * alt_m), 4.255877);
-  return rho > 0 ? Math.sqrt(rho0 / rho) : 1.0;
+  const rho = RHO0 * Math.pow(Math.max(0, 1 - LAPSE_RATE * alt_m / T0), 4.255877);
+  return rho > 0 ? Math.sqrt(RHO0 / rho) : 1.0;
 }
 
 function simulateGroup(exitX_m, exitAlt_m, vx_initial, vFall_ms, tau_s) {
@@ -1300,11 +1303,10 @@ function updateStatsBox() {
 function computeTrueAirspeed(ias_kts, alt_ft) {
   // Approximate standard atmosphere density altitude correction: TAS = IAS * sqrt(rho0 / rho)
   const alt_m = alt_ft * FT_TO_M;
-  const rho0 = 1.225; // kg/m3 at sea level ISA
   // ISA model density from altitude (troposphere, up to ~11 km)
-  const rho = rho0 * Math.pow(1 - 0.00000687535 * alt_m, 4.255877);
+  const rho = RHO0 * Math.pow(1 - LAPSE_RATE * alt_m / T0, 4.255877);
   if (rho <= 0) return ias_kts;
-  return ias_kts * Math.sqrt(rho0 / rho);
+  return ias_kts * Math.sqrt(RHO0 / rho);
 }
 
 function updateSpeedInfo() {
